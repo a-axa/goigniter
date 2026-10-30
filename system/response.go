@@ -78,11 +78,34 @@ func validationMessage(fe validator.FieldError) string {
 	}
 }
 
+// responseWriter tracks whether a response has already been started, so Wrap
+// does not append a second (500) payload after a handler answered itself.
+type responseWriter struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func (w *responseWriter) WriteHeader(status int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *responseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(b)
+}
+
 // thin adapter — all handlers return error, Wrap catches unhandled ones as 500
 func Wrap(fn func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := fn(w, r); err != nil {
-			Error(w, http.StatusInternalServerError, err.Error())
+		rw := &responseWriter{ResponseWriter: w}
+		if err := fn(rw, r); err != nil && !rw.wroteHeader {
+			_ = Error(rw, http.StatusInternalServerError, err.Error())
 		}
 	}
 }

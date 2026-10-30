@@ -23,12 +23,13 @@ func (bc *BaseController) RespondValidation(w http.ResponseWriter, errors interf
 
 func (bc *BaseController) BodyParse(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	if err := json.NewDecoder(r.Body).Decode(out); err != nil {
-		return Error(w, http.StatusBadRequest, "Invalid request body")
+		_ = Error(w, http.StatusBadRequest, "Invalid request body")
+		return err
 	}
 
 	if err := validator.New().Struct(out); err != nil {
-		errs := ParseValidationErrors(err)
-		return ValidationError(w, errs)
+		_ = ValidationError(w, ParseValidationErrors(err))
+		return err
 	}
 
 	return nil
